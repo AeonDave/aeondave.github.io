@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#050608" />
+  <meta name="description" content="AeonDave — malware dev, reverser, AI researcher. Offensive tooling, C2 frameworks, agent orchestration, OSINT recon." />
+  <title>AeonDave // GitHub Node</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23050608'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='14' font-weight='bold' fill='%23f0a84d' text-anchor='middle'%3EA%D0%94%3C/text%3E%3C/svg%3E" />
+  <style>
+    :root {
+      --bg: #050608;
+      --panel: rgba(8, 10, 12, .82);
+      --panel-2: rgba(10, 12, 15, .58);
+      --fg: #e8e2d8;
+      --muted: #827b70;
+      --dim: #494640;
+      --amber: #f0a84d;
+      --amber-hot: #ffc46f;
+      --amber-dim: #8d5724;
+      --cyan: #67e8f9;
+      --magenta: #ff4da6;
+      --line: rgba(240, 168, 77, .19);
+      --mx: 50%;
+      --my: 50%;
+      --rx: 0deg;
+      --ry: 0deg;
+    }
+
+    * { box-sizing: border-box; }
+    html { min-height: 100%; background: var(--bg); }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      color: var(--fg);
+      background:
+        radial-gradient(circle at var(--mx) var(--my), rgba(240,168,77,.10), transparent 25rem),
+        radial-gradient(ellipse 70% 55% at 50% 110%, rgba(103,232,249,.035), transparent 60%),
+        var(--bg);
+      font-family: "Cascadia Code", "SFMono-Regular", "SF Mono", Consolas, "Liberation Mono", monospace;
+      overflow-x: hidden;
+      cursor: crosshair;
+    }
+
+    ::selection { background: var(--amber); color: #0b0b0b; }
+    a { color: inherit; }
+
+    #terminal-rain,
+    .phosphor,
+    .scanlines,
+    .noise,
+    .vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    #terminal-rain { z-index: 0; width: 100%; height: 100%; opacity: .46; }
+
+    .phosphor {
+      z-index: 1;
+      background:
+        repeating-linear-gradient(90deg,
+          rgba(255,0,80,.008) 0,
+          rgba(255,0,80,.008) 1px,
+          rgba(0,255,255,.006) 1px,
+          rgba(0,255,255,.006) 2px,
+          transparent 2px,
+          transparent 4px);
+      mix-blend-mode: screen;
+      opacity: .55;
+    }
+
+    .scanlines {
+      z-index: 8;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent 3px,
+        rgba(0,0,0,.22) 4px,
+        rgba(0,0,0,.22) 5px
+      );
+      opacity: .48;
+    }
+
+    .noise {
+      z-index: 7;
+      opacity: .055;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.9'/%3E%3C/svg%3E");
+      animation: noiseStep .16s steps(2) infinite;
+    }
+
+    .vignette {
+      z-index: 9;
+      box-shadow: inset 0 0 11rem 2rem #000;
+      opacity: .70;
+    }
+
+    .shell {
+      position: relative;
+      z-index: 4;
+      min-height: 100vh;
+      width: min(1180px, calc(100% - 2rem));
+      margin: 0 auto;
+      display: grid;
+      align-items: center;
+      padding: 2rem 0;
+      perspective: 1500px;
+    }
+
+    .terminal {
+      position: relative;
+      width: 100%;
+      border: 1px solid var(--line);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.015), transparent 18%),
+        var(--panel);
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,.015) inset,
+        0 36px 100px rgba(0,0,0,.48),
+        0 0 60px rgba(240,168,77,.045);
+      backdrop-filter: blur(7px);
+      transform-style: preserve-3d;
+      transform: rotateX(var(--rx)) rotateY(var(--ry));
+      transition: transform 110ms ease-out, border-color .25s ease, box-shadow .25s ease;
+      will-change: transform;
+      overflow: hidden;
+    }
+
+    .terminal::before {
+      content: "";
+      position: absolute;
+      inset: -1px;
+      border: 1px solid transparent;
+      background: linear-gradient(120deg, rgba(240,168,77,.28), transparent 22%, transparent 78%, rgba(103,232,249,.13)) border-box;
+      mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+
+    .terminal:hover {
+      border-color: rgba(240,168,77,.27);
+      box-shadow: 0 40px 110px rgba(0,0,0,.52), 0 0 72px rgba(240,168,77,.06);
+    }
+
+    .chrome {
+      height: 42px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1rem;
+      color: var(--muted);
+      font-size: .69rem;
+      letter-spacing: .11em;
+      transform: translateZ(18px);
+    }
+
+    .chrome-left, .chrome-right { display: flex; align-items: center; gap: .7rem; }
+    .led { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+    .led.cyan { background: var(--cyan); box-shadow: 0 0 9px var(--cyan); opacity: .55; }
+
+    .content {
+      display: grid;
+      grid-template-columns: minmax(0, 1.16fr) minmax(300px, .84fr);
+      min-height: 620px;
+      transform-style: preserve-3d;
+    }
+
+    .identity {
+      padding: clamp(2rem, 5vw, 4.7rem);
+      border-right: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      position: relative;
+      transform-style: preserve-3d;
+    }
+
+    .avatar {
+      position: absolute;
+      top: clamp(1.4rem, 3vw, 2.4rem);
+      right: clamp(1.4rem, 3vw, 2.4rem);
+      width: 88px;
+      height: 88px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      transform: translateZ(52px);
+      box-shadow: 0 0 24px rgba(240,168,77,.09);
+    }
+    .avatar img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      filter: grayscale(1) contrast(1.08) brightness(.92);
+      opacity: .88;
+    }
+    .avatar span {
+      display: block;
+      text-align: center;
+      color: var(--amber-dim);
+      font-size: .5rem;
+      letter-spacing: .18em;
+      padding-top: 4px;
+    }
+
+    .eyebrow {
+      color: var(--amber-dim);
+      font-size: .72rem;
+      letter-spacing: .19em;
+      margin-bottom: 1.1rem;
+      transform: translateZ(36px);
+    }
+
+    .mark-wrap { position: relative; width: fit-content; transform: translateZ(64px); }
+    .mark {
+      position: relative;
+      margin: 0;
+      color: var(--amber-hot);
+      font-size: clamp(3.7rem, 9.2vw, 8rem);
+      line-height: .86;
+      letter-spacing: -.065em;
+      font-weight: 800;
+      text-shadow: 0 0 18px rgba(240,168,77,.34), 0 0 60px rgba(240,168,77,.12);
+      isolation: isolate;
+    }
+
+    .mark::before,
+    .mark::after {
+      content: attr(data-text);
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0;
+    }
+    .mark::before { color: var(--cyan); transform: translateX(-2px); }
+    .mark::after { color: var(--magenta); transform: translateX(2px); }
+    .terminal.glitch .mark::before,
+    .terminal.glitch .mark::after { opacity: .36; animation: slice .16s steps(2) 2; }
+
+    .role {
+      margin-top: 1.35rem;
+      color: var(--fg);
+      max-width: 720px;
+      font-size: clamp(.82rem, 1.55vw, 1.05rem);
+      line-height: 1.85;
+      letter-spacing: .055em;
+      text-transform: uppercase;
+      transform: translateZ(46px);
+    }
+    .role .accent { color: var(--amber); }
+
+    .boot {
+      margin-top: 2rem;
+      width: min(680px, 100%);
+      color: var(--muted);
+      font-size: .75rem;
+      line-height: 1.75;
+      transform: translateZ(34px);
+    }
+    .boot-line { min-height: 1.35em; white-space: pre-wrap; }
+    .prompt { color: var(--amber-dim); }
+    .ok { color: #9dbb89; }
+    .cursor {
+      display: inline-block;
+      width: .62em;
+      height: 1.05em;
+      margin-left: .2em;
+      vertical-align: -.15em;
+      background: var(--amber);
+      animation: blink .82s steps(1) infinite;
+      box-shadow: 0 0 8px rgba(240,168,77,.38);
+    }
+
+    .meta {
+      margin-top: 2.1rem;
+      display: flex;
+      gap: 1rem 1.55rem;
+      flex-wrap: wrap;
+      color: var(--dim);
+      font-size: .67rem;
+      letter-spacing: .12em;
+      transform: translateZ(28px);
+    }
+    .meta b { color: var(--muted); font-weight: 500; }
+
+    .domains {
+      padding: clamp(1.25rem, 3vw, 2.5rem);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      background: var(--panel-2);
+      transform-style: preserve-3d;
+    }
+
+    .section-label {
+      display: flex;
+      align-items: center;
+      gap: .65rem;
+      color: var(--amber-dim);
+      font-size: .67rem;
+      letter-spacing: .16em;
+      margin-bottom: 1rem;
+      transform: translateZ(30px);
+    }
+    .section-label::before { content: ""; width: 1.5rem; height: 1px; background: var(--amber-dim); opacity: .7; }
+
+    .domain-list { border-top: 1px solid var(--line); transform: translateZ(42px); }
+    .domain {
+      position: relative;
+      display: grid;
+      grid-template-columns: 2.2rem 1fr auto;
+      gap: .45rem;
+      align-items: center;
+      min-height: 56px;
+      border-bottom: 1px solid var(--line);
+      color: #b8b0a4;
+      text-decoration: none;
+      font-size: .76rem;
+      letter-spacing: .075em;
+      overflow: hidden;
+      transition: color .16s ease, padding-left .16s ease, background .16s ease;
+    }
+    .domain::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, rgba(240,168,77,.08), transparent 70%);
+      transform: translateX(-102%);
+      transition: transform .24s ease;
+    }
+    .domain:hover { color: var(--fg); padding-left: .35rem; }
+    .domain:hover::before { transform: translateX(0); }
+    .domain .num { color: var(--amber-dim); font-size: .61rem; z-index: 1; }
+    .domain .name { z-index: 1; }
+    .domain .tag { color: var(--dim); font-size: .57rem; z-index: 1; text-align: right; }
+    .domain:hover .tag { color: var(--amber-dim); }
+
+    .footer {
+      height: 42px;
+      border-top: 1px solid var(--line);
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 1rem;
+      padding: 0 1rem;
+      color: var(--dim);
+      font-size: .62rem;
+      letter-spacing: .09em;
+      transform: translateZ(18px);
+    }
+    .status { color: #81966f; }
+    .footer a { text-decoration: none; border-bottom: 1px dotted rgba(240,168,77,.35); }
+    .footer a:hover { color: var(--amber); border-bottom-color: var(--amber); }
+    .footer kbd {
+      font: inherit;
+      padding: .15rem .35rem;
+      border: 1px solid rgba(255,255,255,.11);
+      color: var(--muted);
+      background: rgba(255,255,255,.025);
+    }
+
+    .hud-corner { position: absolute; width: 18px; height: 18px; opacity: .6; pointer-events: none; }
+    .hud-corner.tl { top: 12px; left: 12px; border-top: 1px solid var(--amber-dim); border-left: 1px solid var(--amber-dim); }
+    .hud-corner.br { right: 12px; bottom: 12px; border-right: 1px solid var(--amber-dim); border-bottom: 1px solid var(--amber-dim); }
+
+    .signal {
+      position: fixed;
+      z-index: 6;
+      left: 1rem;
+      bottom: 1rem;
+      color: rgba(240,168,77,.28);
+      font-size: .54rem;
+      letter-spacing: .14em;
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      pointer-events: none;
+    }
+
+    body.burst .terminal { animation: terminalKick .17s steps(2) 1; }
+    body.burst .scanlines { opacity: .7; }
+    body.burst #terminal-rain { filter: contrast(1.4) brightness(1.35); }
+
+    @keyframes blink { 0%, 46% { opacity: 1; } 47%, 100% { opacity: 0; } }
+    @keyframes noiseStep { 0% { transform: translate(0,0); } 25% { transform: translate(-1%,1%); } 50% { transform: translate(1%,-1%); } 75% { transform: translate(.5%,1%); } }
+    @keyframes slice {
+      0% { clip-path: inset(6% 0 72% 0); transform: translate(-3px, -1px); }
+      33% { clip-path: inset(53% 0 28% 0); transform: translate(3px, 1px); }
+      66% { clip-path: inset(79% 0 6% 0); transform: translate(-1px, 0); }
+      100% { clip-path: inset(22% 0 59% 0); transform: translate(2px, 1px); }
+    }
+    @keyframes terminalKick {
+      0% { transform: translate(0,0) rotateX(var(--rx)) rotateY(var(--ry)); filter: none; }
+      33% { transform: translate(-5px,1px) rotateX(var(--rx)) rotateY(var(--ry)); filter: saturate(1.7); }
+      66% { transform: translate(4px,-1px) rotateX(var(--rx)) rotateY(var(--ry)); filter: hue-rotate(7deg); }
+      100% { transform: translate(0,0) rotateX(var(--rx)) rotateY(var(--ry)); filter: none; }
+    }
+
+    @media (max-width: 820px) {
+      body { cursor: auto; }
+      .shell { width: min(100% - 1rem, 680px); padding: .5rem 0; }
+      .terminal { transform: none !important; }
+      .content { grid-template-columns: 1fr; min-height: auto; }
+      .identity { border-right: 0; border-bottom: 1px solid var(--line); padding: 3rem 1.5rem 2.4rem; }
+      .avatar { width: 64px; height: 64px; top: 1.4rem; right: 1.25rem; }
+      .avatar span { display: none; }
+      .eyebrow { margin-right: 4.6rem; }
+      .domains { padding: 1.5rem; }
+      .chrome-right span:not(.led) { display: none; }
+      .footer { grid-template-columns: 1fr; height: auto; min-height: 44px; padding: .7rem 1rem; }
+      .footer > :last-child { display: none; }
+      .meta { gap: .7rem 1rem; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+      .terminal { transform: none !important; }
+      #terminal-rain { opacity: .22; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="terminal-rain" aria-hidden="true"></canvas>
+  <div class="phosphor" aria-hidden="true"></div>
+  <div class="noise" aria-hidden="true"></div>
+  <div class="scanlines" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="signal" aria-hidden="true">SIGNAL // AEONDAVE // OFFENSIVE R&amp;D</div>
+
+  <main class="shell">
+    <section class="terminal" id="terminal" aria-label="AeonDave GitHub profile terminal">
+      <span class="hud-corner tl" aria-hidden="true"></span>
+      <span class="hud-corner br" aria-hidden="true"></span>
+
+      <header class="chrome">
+        <div class="chrome-left"><span class="led"></span><span>AEONDAVE::GH-NODE</span></div>
+        <div class="chrome-right"><span>UPLINK/GIT</span><span class="led cyan"></span><span id="clock">--:--:--Z</span></div>
+      </header>
+
+      <div class="content">
+        <section class="identity">
+          <figure class="avatar" aria-label="Operator avatar">
+            <img src="https://avatars.githubusercontent.com/u/7406886?v=4" alt="AeonDave avatar" loading="lazy"
+                 onerror="this.parentNode.style.display='none'" />
+            <span>OPERATOR</span>
+          </figure>
+
+          <div class="eyebrow decrypt" data-text="[ IDENTITY // GITHUB NODE ]">[ IDENTITY // GITHUB NODE ]</div>
+
+          <div class="mark-wrap">
+            <h1 class="mark decrypt" data-text="AeonDave">AeonDave</h1>
+          </div>
+
+          <p class="role">
+            <span class="accent decrypt" data-text="MALWARE DEV">MALWARE DEV</span> // researcher // ai researcher // reverser // c2 &amp; implant tooling // agent orchestration // osint recon
+          </p>
+
+          <div class="boot" aria-label="system initialization log">
+            <div class="boot-line"><span class="prompt">dave@gh-node:~$</span> <span id="boot-command"></span><span class="cursor" aria-hidden="true"></span></div>
+            <div class="boot-line" id="boot-result"></div>
+          </div>
+
+          <div class="meta">
+            <span>REPOS <b>35 PUB</b></span>
+            <span>STARS <b>370+</b></span>
+            <span>STACK <b>GO · PY · TS · C/C++</b></span>
+            <span>NODE <b>EST. 2014</b></span>
+          </div>
+        </section>
+
+        <aside class="domains">
+          <div class="section-label decrypt" data-text="OPERATIONS INDEX">OPERATIONS INDEX</div>
+          <nav class="domain-list" aria-label="GitHub repositories">
+            <a class="domain" href="https://github.com/AeonDave/doork" target="_blank" rel="noopener" data-decrypt><span class="num">01</span><span class="name">DOORK</span><span class="tag">VULN AUDIT · PY ★137</span></a>
+            <a class="domain" href="https://github.com/AeonDave/tilt" target="_blank" rel="noopener" data-decrypt><span class="num">02</span><span class="name">TILT</span><span class="tag">OSINT / IP RECON · PY ★55</span></a>
+            <a class="domain" href="https://github.com/AeonDave/AdaptixC2-Template-Generators" target="_blank" rel="noopener" data-decrypt><span class="num">03</span><span class="name">ADAPTIXC2-GEN</span><span class="tag">C2 TEMPLATES · ★38</span></a>
+            <a class="domain" href="https://github.com/AeonDave/malskill" target="_blank" rel="noopener" data-decrypt><span class="num">04</span><span class="name">MALSKILL</span><span class="tag">OFFENSIVE AI · PY ★37</span></a>
+            <a class="domain" href="https://github.com/AeonDave/pi-persona" target="_blank" rel="noopener" data-decrypt><span class="num">05</span><span class="name">PI-PERSONA</span><span class="tag">AGENT ORCHESTRATION ★13</span></a>
+            <a class="domain" href="https://github.com/AeonDave/go-donut" target="_blank" rel="noopener" data-decrypt><span class="num">06</span><span class="name">GO-DONUT</span><span class="tag">SHELLCODE · GO ★3</span></a>
+            <a class="domain" href="https://github.com/AeonDave/omamori" target="_blank" rel="noopener" data-decrypt><span class="num">07</span><span class="name">OMAMORI</span><span class="tag">SW PROTECTION · C++ ★4</span></a>
+          </nav>
+        </aside>
+      </div>
+
+      <footer class="footer">
+        <div><span class="status">● ONLINE</span> &nbsp; <a href="https://github.com/AeonDave" target="_blank" rel="noopener">github.com/AeonDave</a> &nbsp; // &nbsp; <a href="https://github.com/AeonDave?tab=repositories" target="_blank" rel="noopener">35 repositories</a></div>
+        <div><kbd>G</kbd> glitch &nbsp; <kbd>R</kbd> re-decrypt</div>
+      </footer>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const terminal = document.getElementById('terminal');
+      const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const chars = '01ABCDEF<>/\\[]{}$#*+-:=_';
+
+      // --- Atropos-like whole-screen tilt, dependency-free.
+      if (!reduceMotion && matchMedia('(pointer:fine)').matches) {
+        window.addEventListener('pointermove', (e) => {
+          const x = e.clientX / innerWidth;
+          const y = e.clientY / innerHeight;
+          root.style.setProperty('--mx', `${(x * 100).toFixed(1)}%`);
+          root.style.setProperty('--my', `${(y * 100).toFixed(1)}%`);
+          root.style.setProperty('--ry', `${((x - .5) * 5.2).toFixed(2)}deg`);
+          root.style.setProperty('--rx', `${((.5 - y) * 3.4).toFixed(2)}deg`);
+        }, { passive: true });
+        document.documentElement.addEventListener('mouseleave', () => {
+          root.style.setProperty('--rx', '0deg');
+          root.style.setProperty('--ry', '0deg');
+        });
+      }
+
+      // --- Decrypted text effect.
+      const decrypt = (el, speed = 24) => {
+        const target = el.dataset.text || el.textContent;
+        if (!target || reduceMotion) { el.textContent = target; return; }
+        let frame = 0;
+        const total = Math.max(14, target.length * 1.8);
+        clearInterval(el._decryptTimer);
+        el._decryptTimer = setInterval(() => {
+          const resolved = Math.floor((frame / total) * target.length);
+          el.textContent = [...target].map((c, i) => {
+            if (c === ' ') return ' ';
+            if (i < resolved) return c;
+            return chars[(Math.random() * chars.length) | 0];
+          }).join('');
+          frame++;
+          if (frame > total) {
+            clearInterval(el._decryptTimer);
+            el.textContent = target;
+          }
+        }, speed);
+      };
+
+      const runDecrypt = () => document.querySelectorAll('.decrypt').forEach((el, i) => setTimeout(() => decrypt(el), i * 110));
+      runDecrypt();
+
+      document.querySelectorAll('[data-decrypt]').forEach(link => {
+        const name = link.querySelector('.name');
+        if (!name) return;
+        name.dataset.text = name.textContent;
+        link.addEventListener('mouseenter', () => decrypt(name, 18));
+      });
+
+      // --- Boot line, intentionally terse.
+      const command = 'git clone https://github.com/AeonDave';
+      const cmdEl = document.getElementById('boot-command');
+      const resultEl = document.getElementById('boot-result');
+      let ci = 0;
+      const typeBoot = () => {
+        if (reduceMotion) {
+          cmdEl.textContent = command;
+          resultEl.innerHTML = '<span class="ok">[OK]</span> operations index loaded // operator verified';
+          return;
+        }
+        const t = setInterval(() => {
+          cmdEl.textContent = command.slice(0, ++ci);
+          if (ci >= command.length) {
+            clearInterval(t);
+            setTimeout(() => resultEl.innerHTML = '<span class="ok">[OK]</span> operations index loaded // operator verified', 240);
+          }
+        }, 38);
+      };
+      setTimeout(typeBoot, 620);
+
+      // --- Background: fragmented terminal output, not Matrix rain.
+      const canvas = document.getElementById('terminal-rain');
+      const ctx = canvas.getContext('2d', { alpha: true });
+      const snippets = [
+        '0x7f', 'mov', 'xor', 'jmp', 'ret', 'ROP', 'ELF', 'PE', 'shellcode',
+        'syscall', 'hook', 'patch', 'C2', 'implant', 'HID', 'recon', 'root',
+        'git push', 'HEAD', 'SHA', 'commit', 'fork', 'agent', 'skill',
+        'x86_64', 'ARM64', 'heap', 'stack', 'ptr', '/dev/tty0', 'NULL', 'TRACE'
+      ];
+      let columns = [];
+
+      function resizeCanvas() {
+        const dpr = Math.min(devicePixelRatio || 1, 2);
+        canvas.width = innerWidth * dpr;
+        canvas.height = innerHeight * dpr;
+        canvas.style.width = `${innerWidth}px`;
+        canvas.style.height = `${innerHeight}px`;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const count = Math.max(18, Math.floor(innerWidth / 56));
+        columns = Array.from({ length: count }, (_, i) => ({
+          x: i * (innerWidth / count) + Math.random() * 12,
+          y: Math.random() * innerHeight,
+          speed: .15 + Math.random() * .45,
+          alpha: .08 + Math.random() * .12,
+          tick: Math.random() * 80,
+          text: snippets[(Math.random() * snippets.length) | 0]
+        }));
+      }
+
+      let last = performance.now();
+      function draw(now) {
+        const dt = Math.min(35, now - last);
+        last = now;
+        ctx.clearRect(0, 0, innerWidth, innerHeight);
+        ctx.font = '11px "Cascadia Code", Consolas, monospace';
+        ctx.textBaseline = 'top';
+        for (const col of columns) {
+          col.y += col.speed * dt;
+          col.tick += dt;
+          if (col.tick > 520 + Math.random() * 900) {
+            col.text = snippets[(Math.random() * snippets.length) | 0];
+            col.tick = 0;
+          }
+          if (col.y > innerHeight + 30) col.y = -40 - Math.random() * 180;
+          ctx.fillStyle = `rgba(240,168,77,${col.alpha})`;
+          ctx.fillText(col.text, col.x, col.y);
+          ctx.fillStyle = `rgba(103,232,249,${col.alpha * .23})`;
+          ctx.fillText(((Math.random() * 0xffff) | 0).toString(16).padStart(4,'0'), col.x, col.y + 23);
+        }
+        if (!reduceMotion) requestAnimationFrame(draw);
+      }
+      resizeCanvas();
+      addEventListener('resize', resizeCanvas, { passive: true });
+      if (reduceMotion) draw(performance.now()); else requestAnimationFrame(draw);
+
+      // --- Clock and occasional CRT signal fault.
+      const clock = document.getElementById('clock');
+      const tickClock = () => clock.textContent = new Date().toISOString().slice(11, 19) + 'Z';
+      tickClock();
+      setInterval(tickClock, 1000);
+
+      function glitch() {
+        terminal.classList.add('glitch');
+        document.body.classList.add('burst');
+        setTimeout(() => {
+          terminal.classList.remove('glitch');
+          document.body.classList.remove('burst');
+        }, 190);
+      }
+
+      if (!reduceMotion) {
+        const randomFault = () => {
+          glitch();
+          setTimeout(randomFault, 6500 + Math.random() * 11500);
+        };
+        setTimeout(randomFault, 4200 + Math.random() * 2800);
+      }
+
+      addEventListener('keydown', (e) => {
+        if (e.key.toLowerCase() === 'g') glitch();
+        if (e.key.toLowerCase() === 'r') runDecrypt();
+      });
+    })();
+  </script>
+</body>
+</html>
